@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ Thống Giám Sát Nhịp Tim & SpO2</title>
-    <!-- Thư viện MQTT và Chart.js -->
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <!-- Nhúng thư viện MQTT qua CDN ổn định -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #f4f6f9; padding: 20px; }
@@ -15,10 +15,14 @@
         .chart-box { background: white; padding: 20px; border-radius: 10px; width: 80%; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         button { padding: 12px 24px; font-size: 1em; margin-top: 15px; cursor: pointer; border-radius: 5px; border: none; background: #28a745; color: white; font-weight: bold; }
         button:hover { background: #218838; }
+        #status { font-weight: bold; padding: 8px; margin-bottom: 15px; border-radius: 5px; display: inline-block; }
+        .online { background-color: #d4edda; color: #155724; }
+        .offline { background-color: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
     <h2>HỆ THỐNG GIÁM SÁT NHỊP TIM & SpO2 (ESP32 + MAX30100)</h2>
+    <div id="status" class="offline">Chưa kết nối Server MQTT</div>
 
     <div class="card-container">
         <div class="card">
@@ -41,7 +45,6 @@
     <script>
         let alarmState = false;
 
-        // Cấu hình Biểu đồ Chart.js
         const ctx = document.getElementById('heartRateChart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'line',
@@ -58,15 +61,24 @@
             options: { responsive: true, scales: { x: { display: true }, y: { min: 40, max: 180 } } }
         });
 
-        // Kết nối thẳng tới Broker HiveMQ qua WebSocket
-        const client = mqtt.connect('wss://broker.hivemq.com:8000/mqtt');
+        // Đổi sang cổng WebSocket Secure 8884
+        const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
 
         const topicData = 'sgu/patient/max30100/data';
         const topicControl = 'sgu/patient/max30100/control';
 
         client.on('connect', () => {
-            console.log('✅ Đã kết nối MQTT Broker!');
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = '✅ Đã kết nối MQTT Broker thành công!';
+            statusDiv.className = 'online';
             client.subscribe(topicData);
+        });
+
+        client.on('error', (err) => {
+            console.error('Lỗi kết nối MQTT:', err);
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = '❌ Lỗi kết nối MQTT!';
+            statusDiv.className = 'offline';
         });
 
         client.on('message', (topic, message) => {
@@ -87,7 +99,7 @@
                     }
                     chart.update();
                 } catch (e) {
-                    console.error('Lỗi nhận dữ liệu:', e);
+                    console.error('Lỗi đọc dữ liệu JSON:', e);
                 }
             }
         });
